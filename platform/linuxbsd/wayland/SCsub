@@ -1,0 +1,18 @@
+#!/usr/bin/env python
+
+Import("env")
+
+source_files = [
+    "display_server_wayland.cpp",
+    "key_mapping_wayland.cpp",
+]
+
+if env["vulkan"]:
+    source_files.append("vulkan_context_wayland.cpp")
+
+objects = []
+
+for source_file in source_files:
+    objects.append(env.Object(source_file))
+
+Return("objects")
