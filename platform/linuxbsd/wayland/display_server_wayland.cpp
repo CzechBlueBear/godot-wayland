@@ -1,5 +1,16 @@
 #include "display_server_wayland.h"
 
+#include "wayland_shm_file.h"
+
+//#define _POSIX_C_SOURCE 200112L // or higher
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <time.h>
+#include <unistd.h>
+#include <cassert>
+#include <cstring>
+
 // coherent naming of listeners (to preserve our sanity):
 // if structure is A_B_C_listener, then instance is A_B_C_listener_info,
 // and callbacks are called on_A_B_C_something().
@@ -40,9 +51,9 @@ static const struct wl_seat_listener wl_seat_listener_info = {
     .name = DisplayServerWayland::_on_seat_name,
 };
 
-Error DisplayServerWayland::_connect() {
-    m_display = wl_display_connect(nullptr);
-    if (!m_display) {
+Error DisplayServerWayland::_wayland_connect() {
+    wayland_display = wl_display_connect(nullptr);
+    if (!wayland_display) {
         ERR_PRINT("Wayland display is not available");
         return ERR_UNAVAILABLE;
     }
@@ -54,56 +65,162 @@ Error DisplayServerWayland::_connect() {
     // cleaning up all resources, this should not be a problem in such case
 
     // the registry holds IDs of the most important objects
-    m_registry = wl_display_get_registry(m_display);
-    if (!m_registry) {
+    wayland_registry = wl_display_get_registry(wayland_display);
+    if (!wayland_registry) {
         ERR_PRINT("wayland: wl_display_get_registry() failed, compositor bug?");
-        wl_display_disconnect(m_display);
+        wl_display_disconnect(wayland_display);
         return ERR_UNAVAILABLE;
     }
 
-    wl_registry_add_listener(m_registry, &wl_registry_listener_info, nullptr);
+    wl_registry_add_listener(wayland_registry, &wl_registry_listener_info, nullptr);
 
     // during this roundtrip, the server should send us IDs of many globals,
     // including the compositor, SHM and XDG windowmanager base, and seat;
     // for each global, the on_registry_global() callback is called automatically
-    wl_display_roundtrip(m_display);
+    wl_display_roundtrip(wayland_display);
 
     // check if we have all the needed globals
-    if (!m_compositor || !m_shm || !m_xdg_wm_base || !m_seat) {
+    if (!wayland_compositor || !wayland_xdg_wm_base || !wayland_seat) {
         ERR_PRINT("wayland: missing one of compositor/shm/xdg_wm_base/seat interfaces, compositor bug?");
-        wl_display_disconnect(m_display);
+        wl_display_disconnect(wayland_display);
         return ERR_UNAVAILABLE;
     }
 
-    wl_seat_add_listener(m_seat, &wl_seat_listener_info, nullptr);
-    xdg_wm_base_add_listener(m_xdg_wm_base, &xdg_wm_base_listener_info, nullptr);
+    wl_seat_add_listener(wayland_seat, &wl_seat_listener_info, nullptr);
+    xdg_wm_base_add_listener(wayland_xdg_wm_base, &xdg_wm_base_listener_info, nullptr);
 
-    m_surface = wl_compositor_create_surface(m_compositor);
-    if (!m_surface) {
+    wayland_surface = wl_compositor_create_surface(wayland_compositor);
+    if (!wayland_surface) {
         ERR_PRINT("wayland: wl_compositor_create_surface() failed, compositor bug?");
-        wl_display_disconnect(m_display);
+        wl_display_disconnect(wayland_display);
         return ERR_UNAVAILABLE;
     }
 
-    m_xdg_surface = xdg_wm_base_get_xdg_surface(m_xdg_wm_base, m_surface);
-    if (!m_xdg_surface) {
+    wayland_xdg_surface = xdg_wm_base_get_xdg_surface(wayland_xdg_wm_base, wayland_surface);
+    if (!wayland_xdg_surface) {
         ERR_PRINT("wayland: xdg_wm_base_get_xdg_surface() failed, compositor bug?");
-        wl_display_disconnect(m_display);
+        wl_display_disconnect(wayland_display);
         return ERR_UNAVAILABLE;
     }
 
-    xdg_surface_add_listener(m_xdg_surface, &xdg_surface_listener_info, nullptr);
+    xdg_surface_add_listener(wayland_xdg_surface, &xdg_surface_listener_info, nullptr);
 
-    m_xdg_toplevel = xdg_surface_get_toplevel(m_xdg_surface);
-    if (!m_xdg_toplevel) {
+    wayland_xdg_toplevel = xdg_surface_get_toplevel(wayland_xdg_surface);
+    if (!wayland_xdg_toplevel) {
         ERR_PRINT("wayland: xdg_surface_get_toplevel() failed, compositor bug?");
-        wl_display_disconnect(m_display);
+        wl_display_disconnect(wayland_display);
     }
 
-    xdg_toplevel_set_title(m_xdg_toplevel, "Godot");
-    xdg_toplevel_add_listener(m_xdg_toplevel, &xdg_toplevel_listener_info, nullptr);
+    xdg_toplevel_set_title(wayland_xdg_toplevel, "Godot");
+    xdg_toplevel_add_listener(wayland_xdg_toplevel, &xdg_toplevel_listener_info, nullptr);
+
+    // at this point, we have a functional window but Wayland will not show it yet;
+    // it will appear after the first frame is drawn
 
     return OK;
+}
+
+void DisplayServerWayland::_wayland_disconnect() {
+    if (wayland_display) {
+        wl_display_disconnect(wayland_display);
+        wayland_display = nullptr;
+    }
+}
+
+void DisplayServerWayland::_register_global(char const* interface, uint32_t name) {
+    if (strcmp(interface, wl_compositor_interface.name) == 0) {
+        wayland_compositor = (wl_compositor*)(wl_registry_bind(wayland_registry, name, &wl_compositor_interface, COMPOSITOR_API_VERSION));
+    }
+    else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
+        wayland_xdg_wm_base = (xdg_wm_base*) wl_registry_bind(wayland_registry, name, &xdg_wm_base_interface, 1);
+    }
+    else if (strcmp(interface, wl_seat_interface.name) == 0) {
+        wayland_seat = (wl_seat*) wl_registry_bind(wayland_registry, name, &wl_seat_interface, SEAT_API_VERSION);
+    }
+    else {
+        // server may inform us about potentially many other interfaces we don't use
+        // these can be simply ignored (we don't need to confirm)
+    }
+}
+
+void DisplayServerWayland::_on_xdg_wm_base_ping(void *data, xdg_wm_base *xdg_wm_base, uint32_t serial) {
+    xdg_wm_base_pong(xdg_wm_base, serial);
+}
+
+void DisplayServerWayland::_on_registry_global(void *data, wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
+    ((DisplayServerWayland*)get_singleton())->_register_global(interface, name);
+}
+
+void DisplayServerWayland::_on_registry_global_remove(void *data, struct wl_registry *registry, uint32_t name) {
+    // TODO
+}
+
+void DisplayServerWayland::_on_buffer_release(void* data, wl_buffer* buffer) {
+    wl_buffer_destroy(buffer);
+}
+
+void DisplayServerWayland::_on_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial) {
+    // TODO
+}
+
+void DisplayServerWayland::_on_xdg_toplevel_configure(void* data, struct xdg_toplevel* xdg_toplevel, int32_t width,
+    int32_t height, struct wl_array *states) {
+    // TODO
+}
+
+void DisplayServerWayland::_on_xdg_toplevel_close(void* data, struct xdg_toplevel *xdg_toplevel) {
+    // TODO
+}
+
+void DisplayServerWayland::_on_seat_handle_capabilities(void *data, struct wl_seat *seat, uint32_t capabilities)
+{
+    if (capabilities & WL_SEAT_CAPABILITY_POINTER) {
+        struct wl_pointer *pointer = wl_seat_get_pointer(seat);
+        wl_pointer_add_listener(pointer, &pointer_listener, seat);
+    }
+}
+
+void DisplayServerWayland::_on_seat_name(void* data, struct wl_seat* seat, char const* name) {
+    // TODO
+}
+
+void DisplayServerWayland::_on_pointer_button(void* data, struct wl_pointer *pointer,
+    uint32_t serial, uint32_t time, uint32_t button, uint32_t state) {
+    // TODO
+}
+
+void DisplayServerWayland::_on_pointer_enter(void* data, struct wl_pointer* pointer, uint32_t, wl_surface*, wl_fixed_t x, wl_fixed_t y) {
+    // TODO
+}
+
+void DisplayServerWayland::_on_pointer_leave(void* data, struct wl_pointer* pointer, uint32_t, wl_surface*) {
+    // TODO
+}
+
+void DisplayServerWayland::_on_pointer_motion(void *data, struct wl_pointer *wl_pointer,
+               uint32_t time, wl_fixed_t surface_x, wl_fixed_t surface_y) {
+    // TODO
+}
+
+void DisplayServerWayland::_on_pointer_frame(void* data, struct wl_pointer* pointer) {
+    // TODO
+}
+
+DisplayServerWayland::DisplayServerWayland(
+    const String &p_rendering_driver,
+    WindowMode p_mode,
+    VSyncMode p_vsync_mode,
+    uint32_t p_flags,
+    const Vector2i *p_position,
+    const Vector2i &p_resolution,
+    int p_screen,
+    Error &r_error
+) {
+    r_error = _wayland_connect();
+}
+
+DisplayServerWayland::~DisplayServerWayland() {
+    _wayland_disconnect();
 }
 
 bool DisplayServerWayland::has_feature(Feature p_feature) const {
@@ -112,28 +229,28 @@ bool DisplayServerWayland::has_feature(Feature p_feature) const {
         case DisplayServer::FEATURE_HIDPI:
             return true;
 
-		case DisplayServer::FEATURE_GLOBAL_MENU:
-		case DisplayServer::FEATURE_SUBWINDOWS:
-		case DisplayServer::FEATURE_TOUCHSCREEN:
-		case DisplayServer::FEATURE_MOUSE_WARP:
-		case DisplayServer::FEATURE_CLIPBOARD:
-		case DisplayServer::FEATURE_VIRTUAL_KEYBOARD:
-		case DisplayServer::FEATURE_CURSOR_SHAPE:
-		case DisplayServer::FEATURE_CUSTOM_CURSOR_SHAPE:
-		case DisplayServer::FEATURE_NATIVE_DIALOG:
-		case DisplayServer::FEATURE_IME:
-		case DisplayServer::FEATURE_WINDOW_TRANSPARENCY:
-		case DisplayServer::FEATURE_ICON:
-		case DisplayServer::FEATURE_NATIVE_ICON:
-		case DisplayServer::FEATURE_ORIENTATION:
-		case DisplayServer::FEATURE_SWAP_BUFFERS:
-		case DisplayServer::FEATURE_KEEP_SCREEN_ON:
-		case DisplayServer::FEATURE_CLIPBOARD_PRIMARY:
-		case DisplayServer::FEATURE_TEXT_TO_SPEECH:
-		case DisplayServer::FEATURE_EXTEND_TO_TITLE:
-		case DisplayServer::FEATURE_SCREEN_CAPTURE:
-			return false;
-	}
+        case DisplayServer::FEATURE_GLOBAL_MENU:
+        case DisplayServer::FEATURE_SUBWINDOWS:
+        case DisplayServer::FEATURE_TOUCHSCREEN:
+        case DisplayServer::FEATURE_MOUSE_WARP:
+        case DisplayServer::FEATURE_CLIPBOARD:
+        case DisplayServer::FEATURE_VIRTUAL_KEYBOARD:
+        case DisplayServer::FEATURE_CURSOR_SHAPE:
+        case DisplayServer::FEATURE_CUSTOM_CURSOR_SHAPE:
+        case DisplayServer::FEATURE_NATIVE_DIALOG:
+        case DisplayServer::FEATURE_IME:
+        case DisplayServer::FEATURE_WINDOW_TRANSPARENCY:
+        case DisplayServer::FEATURE_ICON:
+        case DisplayServer::FEATURE_NATIVE_ICON:
+        case DisplayServer::FEATURE_ORIENTATION:
+        case DisplayServer::FEATURE_SWAP_BUFFERS:
+        case DisplayServer::FEATURE_KEEP_SCREEN_ON:
+        case DisplayServer::FEATURE_CLIPBOARD_PRIMARY:
+        case DisplayServer::FEATURE_TEXT_TO_SPEECH:
+        case DisplayServer::FEATURE_EXTEND_TO_TITLE:
+        case DisplayServer::FEATURE_SCREEN_CAPTURE:
+            return false;
+    }
 }
 
 String DisplayServerWayland::get_name() const {
@@ -142,11 +259,11 @@ String DisplayServerWayland::get_name() const {
 
 int64_t DisplayServerWayland::window_get_native_handle(HandleType p_handle_type, WindowID p_window) const {
     if (p_handle_type == HandleType::DISPLAY_HANDLE) {
-        return reinterpret_cast<int64_t>(m_display);
+        return reinterpret_cast<int64_t>(wayland_display);
     }
     else if (p_handle_type == HandleType::WINDOW_HANDLE) {
         if (p_window == MAIN_WINDOW_ID) {
-            return reinterpret_cast<int64_t>(m_surface);
+            return reinterpret_cast<int64_t>(wayland_surface);
         }
         return 0;
     }

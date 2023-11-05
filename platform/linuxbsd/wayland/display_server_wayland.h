@@ -32,8 +32,9 @@
 #define DISPLAY_SERVER_WAYLAND_H
 
 #include <wayland-client.h>
-#include "xdg-shell-client-protocol.h"
-#include "zxdg-decoration-client-protocol.h"
+#include "thirdparty/glad/glad/egl.h"
+#include "thirdparty/wayland/xdg-shell-client-protocol.h"
+#include "thirdparty/wayland/zxdg-decoration-client-protocol.h"
 
 #include "core/os/thread_safe.h"
 #include "servers/display_server.h"
@@ -42,20 +43,28 @@ class DisplayServerWayland : public DisplayServer {
     _THREAD_SAFE_CLASS_
 
     // Wayland globals
-    wl_display* m_display = nullptr;
-    wl_registry* m_registry = nullptr;
-    wl_compositor* m_compositor = nullptr;
-    wl_shm* m_shm = nullptr;
-    xdg_wm_base* m_xdg_wm_base = nullptr;
-    wl_seat* m_seat = nullptr;
+    wl_display* wayland_display = nullptr;
+    wl_registry* wayland_registry = nullptr;
+    wl_compositor* wayland_compositor = nullptr;
+    xdg_wm_base* wayland_xdg_wm_base = nullptr;
+    wl_seat* wayland_seat = nullptr;
 
     // Wayland objects
-    wl_surface* m_surface = nullptr;
-    xdg_surface* m_xdg_surface = nullptr;
-    xdg_toplevel* m_xdg_toplevel = nullptr;
+    wl_surface* wayland_surface = nullptr;
+    xdg_surface* wayland_xdg_surface = nullptr;
+    xdg_toplevel* wayland_xdg_toplevel = nullptr;
+    wl_shm_pool *wayland_shm_pool = nullptr;
 
-    // connects to Wayland server and establishes all needed interfaces
-    Error _connect();
+    EGLDisplay* egl_display = nullptr;
+
+    // versions of interfaces we want from the server
+    const uint32_t COMPOSITOR_API_VERSION = 4;
+    const uint32_t SHM_API_VERSION = 1;
+    const uint32_t SEAT_API_VERSION = 7;
+
+    Error _wayland_connect();
+    void _wayland_disconnect();
+    void _register_global(char const* interface, uint32_t name);
 
 public:
 

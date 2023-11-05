@@ -5,7 +5,16 @@ Import("env")
 source_files = [
     "display_server_wayland.cpp",
     "key_mapping_wayland.cpp",
+    # "#thirdparty/wayland/wayland-os.c",
+    # "#thirdparty/wayland/wayland-util.c",
+    # "#thirdparty/wayland/connection.c",
+    # "#thirdparty/wayland/wayland-client.c",
+    # "#thirdparty/wayland/protocol.c",
+    "#thirdparty/wayland/xdg-shell-protocol.c",
+    "#thirdparty/wayland/zxdg-decoration-protocol.c"
 ]
+
+env.Append(LIBS=["wayland-client"])
 
 if env["vulkan"]:
     source_files.append("vulkan_context_wayland.cpp")
