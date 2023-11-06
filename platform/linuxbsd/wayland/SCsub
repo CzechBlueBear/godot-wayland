@@ -5,12 +5,15 @@ Import("env")
 source_files = [
     "display_server_wayland.cpp",
     "key_mapping_wayland.cpp",
-    "#thirdparty/wayland/protocol.c",
+#    "#thirdparty/wayland/protocol.c",
     "#thirdparty/wayland/xdg-shell.c",
     "#thirdparty/wayland/zxdg-decoration.c",
     "#thirdparty/wayland/zxdg-output.c",
     "#thirdparty/wayland/zwp-pointer-constraints.c"
 ]
+
+if env["opengl3"]:
+    source_files.append("gl_manager_wayland_egl.cpp")
 
 if env["vulkan"]:
     source_files.append("vulkan_context_wayland.cpp")

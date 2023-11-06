@@ -35,6 +35,7 @@
 #include "thirdparty/glad/glad/egl.h"
 #include "thirdparty/wayland/xdg-shell-client.h"
 #include "thirdparty/wayland/zxdg-decoration-client.h"
+#include "gl_manager_wayland_egl.h"
 
 #include "core/os/thread_safe.h"
 #include "servers/display_server.h"
@@ -53,7 +54,6 @@ class DisplayServerWayland : public DisplayServer {
     wl_surface* wayland_surface = nullptr;
     xdg_surface* wayland_xdg_surface = nullptr;
     xdg_toplevel* wayland_xdg_toplevel = nullptr;
-    wl_shm_pool *wayland_shm_pool = nullptr;
 
     EGLDisplay* egl_display = nullptr;
 
@@ -64,9 +64,18 @@ class DisplayServerWayland : public DisplayServer {
 
     int screen_width, screen_height = 0;
 
+    struct WindowData {
+        // TODO
+    };
+    HashMap<WindowID, WindowData> windows;
+
     Error _wayland_connect();
     void _wayland_disconnect();
     void _register_global(char const* interface, uint32_t name);
+
+#if defined(GLES3_ENABLED)
+    GLManagerEGL_Wayland *gl_manager_egl = nullptr;
+#endif
 
 public:
 
@@ -107,7 +116,70 @@ public:
     virtual Color screen_get_pixel(const Point2i &p_position) const override;
     virtual Ref<Image> screen_get_image(int p_screen = SCREEN_OF_MAIN_WINDOW) const override;
 
+    virtual Vector<DisplayServer::WindowID> get_window_list() const override;
+
+    virtual WindowID create_sub_window(WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Rect2i &p_rect = Rect2i()) override;
+    virtual void show_window(WindowID p_id) override;
+    virtual void delete_sub_window(WindowID p_id) override;
+
+    virtual WindowID window_get_active_popup() const override;
+    virtual void window_set_popup_safe_rect(WindowID p_window, const Rect2i &p_rect) override;
+    virtual Rect2i window_get_popup_safe_rect(WindowID p_window) const override;
+
+    virtual WindowID get_window_at_screen_position(const Point2i &p_position) const override;
+
     virtual int64_t window_get_native_handle(HandleType p_handle_type, WindowID p_window = MAIN_WINDOW_ID) const override;
+
+    virtual void window_attach_instance_id(ObjectID p_instance, WindowID p_window = MAIN_WINDOW_ID) override;
+    virtual ObjectID window_get_attached_instance_id(WindowID p_window = MAIN_WINDOW_ID) const override;
+
+    virtual void window_set_title(const String &p_title, WindowID p_window = MAIN_WINDOW_ID) override;
+    virtual void window_set_mouse_passthrough(const Vector<Vector2> &p_region, WindowID p_window = MAIN_WINDOW_ID) override;
+
+    virtual void window_set_rect_changed_callback(const Callable &p_callable, WindowID p_window = MAIN_WINDOW_ID) override;
+    virtual void window_set_window_event_callback(const Callable &p_callable, WindowID p_window = MAIN_WINDOW_ID) override;
+    virtual void window_set_input_event_callback(const Callable &p_callable, WindowID p_window = MAIN_WINDOW_ID) override;
+    virtual void window_set_input_text_callback(const Callable &p_callable, WindowID p_window = MAIN_WINDOW_ID) override;
+    virtual void window_set_drop_files_callback(const Callable &p_callable, WindowID p_window = MAIN_WINDOW_ID) override;
+
+    virtual int window_get_current_screen(WindowID p_window = MAIN_WINDOW_ID) const override;
+    virtual void window_set_current_screen(int p_screen, WindowID p_window = MAIN_WINDOW_ID) override;
+
+    virtual Point2i window_get_position(WindowID p_window = MAIN_WINDOW_ID) const override;
+    virtual Point2i window_get_position_with_decorations(WindowID p_window = MAIN_WINDOW_ID) const override;
+    virtual void window_set_position(const Point2i &p_position, WindowID p_window = MAIN_WINDOW_ID) override;
+
+    virtual void window_set_max_size(const Size2i p_size, WindowID p_window = MAIN_WINDOW_ID) override;
+    virtual Size2i window_get_max_size(WindowID p_window = MAIN_WINDOW_ID) const override;
+    virtual void gl_window_make_current(DisplayServer::WindowID p_window_id) override;
+
+    virtual void window_set_transient(WindowID p_window, WindowID p_parent) override;
+
+    virtual void window_set_min_size(const Size2i p_size, WindowID p_window = MAIN_WINDOW_ID) override;
+    virtual Size2i window_get_min_size(WindowID p_window = MAIN_WINDOW_ID) const override;
+
+    virtual void window_set_size(const Size2i p_size, WindowID p_window = MAIN_WINDOW_ID) override;
+    virtual Size2i window_get_size(WindowID p_window = MAIN_WINDOW_ID) const override;
+    virtual Size2i window_get_size_with_decorations(WindowID p_window = MAIN_WINDOW_ID) const override;
+
+    virtual void window_set_mode(WindowMode p_mode, WindowID p_window = MAIN_WINDOW_ID) override;
+    virtual WindowMode window_get_mode(WindowID p_window = MAIN_WINDOW_ID) const override;
+
+    virtual bool window_is_maximize_allowed(WindowID p_window = MAIN_WINDOW_ID) const override;
+
+    virtual void window_set_flag(WindowFlags p_flag, bool p_enabled, WindowID p_window = MAIN_WINDOW_ID) override;
+    virtual bool window_get_flag(WindowFlags p_flag, WindowID p_window = MAIN_WINDOW_ID) const override;
+
+    virtual void window_request_attention(WindowID p_window = MAIN_WINDOW_ID) override;
+
+    virtual void window_move_to_foreground(WindowID p_window = MAIN_WINDOW_ID) override;
+    virtual bool window_is_focused(WindowID p_window = MAIN_WINDOW_ID) const override;
+
+    virtual bool window_can_draw(WindowID p_window = MAIN_WINDOW_ID) const override;
+
+    virtual bool can_any_window_draw() const override;
+
+    virtual void process_events() override;
 
     static DisplayServer *create_func(const String &p_rendering_driver, WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, Error &r_error);
     static Vector<String> get_rendering_drivers_func();

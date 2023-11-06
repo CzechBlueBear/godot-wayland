@@ -39,7 +39,7 @@
 #include "x11/display_server_x11.h"
 #endif
 
-#ifndef WAYLAND_ENABLED
+#ifdef WAYLAND_ENABLED
 #include "wayland/display_server_wayland.h"
 #endif
 

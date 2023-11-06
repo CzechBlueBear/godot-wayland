@@ -290,6 +290,36 @@ Size2i DisplayServerWayland::screen_get_size(int p_screen) const {
     return Size2i(screen_width, screen_height);
 }
 
+void DisplayServerWayland::gl_window_make_current(DisplayServer::WindowID p_window_id) {
+#if defined(GLES3_ENABLED)
+    if (gl_manager_egl) {
+        gl_manager_egl->window_make_current(p_window_id);
+    }
+#endif
+}
+
+bool DisplayServerWayland::window_can_draw(WindowID p_window) const {
+    // FIXME: not much sure what this means, copied this from X11
+    return window_get_mode(p_window) != WINDOW_MODE_MINIMIZED;
+}
+
+bool DisplayServerWayland::can_any_window_draw() const {
+    _THREAD_SAFE_METHOD_
+
+    // FIXME: see window_can_draw() - I don't really know what should be done here
+    for (const KeyValue<WindowID, WindowData> &E : windows) {
+        if (window_get_mode(E.key) != WINDOW_MODE_MINIMIZED) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void DisplayServerWayland::process_events() {
+    wl_display_dispatch(wayland_display);
+}
+
 Vector<String> DisplayServerWayland::get_rendering_drivers_func() {
     Vector<String> drivers;
 
