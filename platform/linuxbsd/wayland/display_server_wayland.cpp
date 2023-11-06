@@ -269,3 +269,45 @@ int64_t DisplayServerWayland::window_get_native_handle(HandleType p_handle_type,
     }
     return 0;
 }
+
+Vector<String> DisplayServerWayland::get_rendering_drivers_func() {
+    Vector<String> drivers;
+
+#ifdef VULKAN_ENABLED
+    drivers.push_back("vulkan");
+#endif
+#ifdef GLES3_ENABLED
+    drivers.push_back("opengl3");
+    drivers.push_back("opengl3_es");
+#endif
+
+    return drivers;
+}
+
+DisplayServer *DisplayServerWayland::create_func(const String &p_rendering_driver, WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, Error &r_error) {
+    DisplayServer *ds = memnew(DisplayServerWayland(p_rendering_driver, p_mode, p_vsync_mode, p_flags, p_position, p_resolution, p_screen, r_error));
+    if (r_error != OK) {
+        if (p_rendering_driver == "vulkan") {
+            String executable_name = OS::get_singleton()->get_executable_path().get_file();
+            OS::get_singleton()->alert(
+                    vformat("Your video card drivers seem not to support the required Vulkan version.\n\n"
+                            "If possible, consider updating your video card drivers or using the OpenGL 3 driver.\n\n"
+                            "You can enable the OpenGL 3 driver by starting the engine from the\n"
+                            "command line with the command:\n\n    \"%s\" --rendering-driver opengl3\n\n"
+                            "If you recently updated your video card drivers, try rebooting.",
+                            executable_name),
+                    "Unable to initialize Vulkan video driver");
+        } else {
+            OS::get_singleton()->alert(
+                    "Your video card drivers seem not to support the required OpenGL 3.3 version.\n\n"
+                    "If possible, consider updating your video card drivers.\n\n"
+                    "If you recently updated your video card drivers, try rebooting.",
+                    "Unable to initialize OpenGL video driver");
+        }
+    }
+    return ds;
+}
+
+void DisplayServerWayland::register_wayland_driver() {
+    register_create_function("wayland", create_func, get_rendering_drivers_func);
+}

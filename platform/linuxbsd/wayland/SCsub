@@ -14,8 +14,6 @@ source_files = [
     "#thirdparty/wayland/zxdg-decoration-protocol.c"
 ]
 
-env.Append(LIBS=["wayland-client"])
-
 if env["vulkan"]:
     source_files.append("vulkan_context_wayland.cpp")
 

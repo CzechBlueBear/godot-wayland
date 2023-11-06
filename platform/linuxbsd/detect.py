@@ -47,6 +47,7 @@ def get_opts():
         BoolVariable("fontconfig", "Use fontconfig for system fonts support", True),
         BoolVariable("udev", "Use udev for gamepad connection callbacks", True),
         BoolVariable("x11", "Enable X11 display", True),
+        BoolVariable("wayland", "Enable Wayland display", True),
         BoolVariable("touch", "Enable touch events", True),
         BoolVariable("execinfo", "Use libexecinfo on systems where glibc is not available", False),
     ]
@@ -432,6 +433,17 @@ def configure(env: "Environment"):
                 sys.exit(255)
             env.ParseConfig("pkg-config xi --cflags --libs")
         env.Append(CPPDEFINES=["X11_ENABLED"])
+
+    if env["wayland"]:
+        if os.system("pkg-config --exists wayland-client"):
+            print("Error: wayland-client library not found. Aborting.")
+            sys.exit(255)
+        env.ParseConfig("pkg-config wayland-client --cflags --libs")
+        if os.system("pkg-config --exists wayland-protocols"):
+            print("Error: wayland-protocols library not found. Aborting.")
+            sys.exit(255)
+        env.ParseConfig("pkg-config wayland-protocols --cflags --libs")
+        env.Append(CPPDEFINES=["WAYLAND_ENABLED"])
 
     if env["vulkan"]:
         env.Append(CPPDEFINES=["VULKAN_ENABLED"])

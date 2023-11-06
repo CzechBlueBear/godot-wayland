@@ -91,13 +91,17 @@ public:
 
 public:
 
-    DisplayServerWayland(const String &p_rendering_driver, WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, Error &r_error);
-    ~DisplayServerWayland();
-
     virtual bool has_feature(Feature p_feature) const override;
     virtual String get_name() const override;
 
     virtual int64_t window_get_native_handle(HandleType p_handle_type, WindowID p_window = MAIN_WINDOW_ID) const override;
+
+    static DisplayServer *create_func(const String &p_rendering_driver, WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, Error &r_error);
+    static Vector<String> get_rendering_drivers_func();
+    static void register_wayland_driver();
+
+    DisplayServerWayland(const String &p_rendering_driver, WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, Error &r_error);
+    ~DisplayServerWayland();
 };
 
 #endif
