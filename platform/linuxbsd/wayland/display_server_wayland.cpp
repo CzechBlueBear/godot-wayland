@@ -270,6 +270,26 @@ int64_t DisplayServerWayland::window_get_native_handle(HandleType p_handle_type,
     return 0;
 }
 
+int DisplayServerWayland::get_screen_count() const {
+    return 0;   // TODO
+}
+
+int DisplayServerWayland::get_primary_screen() const {
+    return 0;   // TODO
+}
+
+int DisplayServerWayland::get_keyboard_focus_screen() const {
+    return 0;   // TODO
+}
+
+Point2i DisplayServerWayland::screen_get_position(int p_screen) const {
+    return Point2i(0, 0);   // TODO
+}
+
+Size2i DisplayServerWayland::screen_get_size(int p_screen) const {
+    return Size2i(screen_width, screen_height);
+}
+
 Vector<String> DisplayServerWayland::get_rendering_drivers_func() {
     Vector<String> drivers;
 

@@ -33,8 +33,8 @@
 
 #include <wayland-client.h>
 #include "thirdparty/glad/glad/egl.h"
-#include "thirdparty/wayland/xdg-shell-client-protocol.h"
-#include "thirdparty/wayland/zxdg-decoration-client-protocol.h"
+#include "thirdparty/wayland/xdg-shell-client.h"
+#include "thirdparty/wayland/zxdg-decoration-client.h"
 
 #include "core/os/thread_safe.h"
 #include "servers/display_server.h"
@@ -61,6 +61,8 @@ class DisplayServerWayland : public DisplayServer {
     const uint32_t COMPOSITOR_API_VERSION = 4;
     const uint32_t SHM_API_VERSION = 1;
     const uint32_t SEAT_API_VERSION = 7;
+
+    int screen_width, screen_height = 0;
 
     Error _wayland_connect();
     void _wayland_disconnect();
@@ -93,6 +95,17 @@ public:
 
     virtual bool has_feature(Feature p_feature) const override;
     virtual String get_name() const override;
+
+    virtual int get_screen_count() const override;
+    virtual int get_primary_screen() const override;
+    virtual int get_keyboard_focus_screen() const override;
+    virtual Point2i screen_get_position(int p_screen = SCREEN_OF_MAIN_WINDOW) const override;
+    virtual Size2i screen_get_size(int p_screen = SCREEN_OF_MAIN_WINDOW) const override;
+    virtual Rect2i screen_get_usable_rect(int p_screen = SCREEN_OF_MAIN_WINDOW) const override;
+    virtual int screen_get_dpi(int p_screen = SCREEN_OF_MAIN_WINDOW) const override;
+    virtual float screen_get_refresh_rate(int p_screen = SCREEN_OF_MAIN_WINDOW) const override;
+    virtual Color screen_get_pixel(const Point2i &p_position) const override;
+    virtual Ref<Image> screen_get_image(int p_screen = SCREEN_OF_MAIN_WINDOW) const override;
 
     virtual int64_t window_get_native_handle(HandleType p_handle_type, WindowID p_window = MAIN_WINDOW_ID) const override;
 
